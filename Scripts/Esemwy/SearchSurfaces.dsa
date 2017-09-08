@@ -1,0 +1,205 @@
+var programName = "Search Surfaces";
+var versionName = "0.01";
+
+function getMaterialObject() {
+    var nNodes = Scene.getNumNodes();
+
+    for (var i=0; i < nNodes; i++) {
+        var oNode = Scene.getNode(i)
+        var oObj = oNode.getObject();
+        if (! oObj) continue;
+        var oShape = oObj.getCurrentShape();
+        if (! oShape) continue;
+        var oMat = oShape.getMaterial(0);
+        if (oMat) return oMat;
+    }
+}
+
+function forAllSurfaces( searchString, withMaterial, doAction )
+{
+    var oMat = getMaterialObject();
+     if( !oMat ) return;
+ 
+    var nMaterials = oMat.getNumMaterials();
+
+    for( var i = 0; i < nMaterials; i++ ){
+        var oMaterial = oMat.getMaterial( i );
+        if (! oMaterial) continue;
+        withMaterial(oMaterial, searchString, doAction);
+    }  
+}
+
+function forAllChildren( oNode, searchString, withMaterial, doAction )
+{
+    if (oNode) {
+        var oObj = oNode.getObject();
+        if (oObj) {
+            var oShape = oObj.getCurrentShape();
+            if (oShape) {
+                var nMaterials = oShape.getNumMaterials();
+                for (var i = 0; i < nMaterials; i++) {
+                    var oMaterial = oShape.getMaterial( i );
+                    if (!oMaterial) continue;
+                    withMaterial( oMaterial, searchString, doAction );
+                }
+            }
+        }
+        var nChildren = oNode.getNumNodeChildren();
+        for (var j = 0; j < nChildren; j++) {
+            var oChild = oNode.getNodeChild( j );
+            forAllChildren( oChild, searchString, withMaterial, doAction );
+        }
+    }
+}
+
+function forSelectedNodes( searchString, withMaterial, doAction )
+{
+    var nSelected = Scene.getNumSelectedNodes();
+    for (var i = 0; i < nSelected; i++) {
+        var oNode = Scene.getSelectedNode( i );
+        forAllChildren( oNode, searchString, withMaterial, doAction );
+    }
+}
+
+function matchMaterialLabel(oMaterial, searchString)
+{
+    var sLabel = oMaterial.getLabel();
+    return ( sLabel.find(searchString) !=  -1);
+}
+
+function matchMaterialTag(oMaterial, searchString)
+{
+    var aTags = oMaterial.getTags();
+    return ( aTags.indexOf( searchString ) >= 0 );
+}
+
+function withMaterialLabel( oMaterial, searchString, doAction )
+{
+    var bMatch = matchMaterialLabel(oMaterial, searchString);
+    doAction(oMaterial, bMatch);
+}
+
+function withMaterialTag( oMaterial, searchString, doAction )
+{
+    var bMatch = matchMaterialTag(oMaterial, searchString);
+    doAction(oMaterial, bMatch);
+}
+
+function withMaterialLabelOrTag( oMaterial, searchString, doAction )
+{
+    var bMatch = (matchMaterialLabel(oMaterial, searchString) || matchMaterialTag(oMaterial, searchString));
+    doAction(oMaterial, bMatch);
+}
+
+function withAllMaterials( oMaterial, searchString, doAction )
+{
+    doAction(oMaterial, true);
+}
+
+function addToSelection(oMaterial, bMatch)
+{
+    if (bMatch) oMaterial.select(true);
+}
+
+function removeFromSelection(oMaterial, bMatch)
+{
+    if (bMatch) oMaterial.select(false);
+}
+
+function makeSelection(oMaterial, bMatch)
+{
+    if (bMatch) {
+        oMaterial.select(true);
+    }
+    else {
+        oMaterial.select(false);
+    }
+}
+
+var forAll = forSelectedNodes;
+var withMaterialMatching = withMaterialLabel;
+var executeAction = makeSelection;
+var g_Match = Array(withMaterialLabel, withMaterialTag, withMaterialLabelOrTag);
+var g_MatchNames = Array("Label", "Tag", "Label and Tag");
+
+(function() {
+    //set dialog
+    var wDlg = new DzDialog;
+    wDlg.caption = programName + " " + versionName;
+
+    wLayout = DzVBoxLayout(wDlg);
+    wLayout.columns = 1;
+    
+    var wGbSearchSelected = DzVGroupBox(wDlg);
+    wGbSearchSelected.columns = 1;
+    var wCkSearchSelected = DzCheckBox(wGbSearchSelected);
+    wCkSearchSelected.text = "Search Only Selected Nodes";
+    wCkSearchSelected.selected = true;
+    connect(wCkSearchSelected, "toggled(bool)", function(bSelected) {
+        if (bSelected) {
+            forAll = forSelectedNodes;
+        }
+        else {
+            forAll = forAllSurfaces;
+        }
+    });
+    wLayout.addWidget(wGbSearchSelected);
+    
+    var wGbSearchString = new DzVGroupBox(wDlg);
+    wGbSearchString.columns = 2;
+    var wLblSearch = DzLabel(wGbSearchString);
+    wLblSearch.text = "Search text:";
+    wEdSearchText = DzLineEdit(wGbSearchString);
+    wEdSearchText.text = "";
+    wEdSearchText.readOnly = false;
+    wLayout.addWidget(wGbSearchString);
+    
+    var wGbWith = DzVGroupBox(wDlg);
+    wGbWith.columns = 2;
+    var wLblSearch = DzLabel(wGbWith);
+    wLblSearch.text = "Search by";
+    var wComboWith = DzComboBox(wGbWith);
+    for (var i = 0; i < g_MatchNames.length; i++) {
+            wComboWith.insertItem(g_MatchNames[i]);
+    }
+    wComboWith.currentItem = 0;
+    connect(wComboWith, "activated(int)", function(i) {
+        withMaterialMatching = g_Match[i];
+    });
+    wLayout.addWidget(wGbWith);
+
+
+    var wGbMakeSelections = DzButtonGroup(wDlg)
+    var wBtnMake = new DzPushButton(wGbMakeSelections);
+    wBtnMake.text = "Make Selection";
+    connect(wBtnMake, "clicked()", function() {
+        forAll(wEdSearchText.text, withMaterialMatching, makeSelection);
+    });
+    var wBtnAdd = new DzPushButton(wGbMakeSelections);
+    wBtnAdd.text = "Add To";
+    connect(wBtnAdd, "clicked()", function() {
+        forAll(wEdSearchText.text, withMaterialMatching, addToSelection);
+    });
+    var wBtnRemove = new DzPushButton(wGbMakeSelections);
+    wBtnRemove.text = "Remove From";
+    connect(wBtnRemove, "clicked()", function() {
+        forAll(wEdSearchText.text, withMaterialMatching, removeFromSelection);
+    });
+    wLayout.addWidget(wGbMakeSelections);
+    
+    var wGbClearCancel = DzButtonGroup(wDlg)
+    var wBtnClear = new DzPushButton(wGbClearCancel);
+    wBtnClear.text = "Clear";
+    connect(wBtnClear, "clicked()", function() {
+        forAll("", withAllMaterials, removeFromSelection);
+    });
+    var wBtnCancel = new DzPushButton(wGbClearCancel);
+    wBtnCancel.text = "Cancel";
+    wDlg.setRejectButton( wBtnCancel );
+    wLayout.addWidget(wGbClearCancel);
+
+    wDlg.minWidth = 350;
+    wDlg.minHeight = 225;
+
+    wDlg.exec();
+})();
