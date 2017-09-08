@@ -6,3 +6,9 @@ A favorite use is to search for "Light" or "Filament" in order to change the bri
 
 ## Installation
 Place ```Scripts``` directly in your DAZ Studio content folder.
+
+## Usage
+- Browse to ```Scripts/Esemwy``` and double-click on the ```SearchSurfaces``` icon.
+- Enter your search term.
+- Either Make or Add To selection
+- Add and Subtract from the selection with additional search terms
